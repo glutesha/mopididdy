@@ -37,6 +37,7 @@ class TracklistController:
         self._consume: bool = False
         self._random: bool = False
         self._shuffled: list[TlTrack] = []
+        self._requested: list[TlTrack] = []
         self._unplayable: list[TlTrack] = []
         self._repeat: bool = False
         self._single: bool = False
@@ -233,9 +234,12 @@ class TracklistController:
         )
         return tl_track.tlid if tl_track else None
 
-    def _get_next_tl_track(self, reference: TlTrack | None) -> TlTrack | None:
+    def _get_next_tl_track(self, reference: TlTrack | None) -> TlTrack | None:  # noqa: PLR0911
         if not self._tl_tracks:
             return None
+
+        if self._requested:
+            return self._requested[0]
 
         if (
             self.get_random()
@@ -293,6 +297,39 @@ class TracklistController:
         # Since we know we are not at zero we have to be somewhere in the range
         # 1 - len(tracks) Thus 'position - 1' will always be within the list.
         return self._tl_tracks[position - 1]
+
+    def request(
+        self,
+        tracks: Iterable[Track] | None = None,
+        *,
+        uris: Iterable[Uri] | None = None,
+    ) -> list[TlTrack]:
+        """Requests tracks to the tracklist.
+
+        Invokes add method, except it makes the tracklist enter the `requested`
+        state, where tracks are playing from a special queue that overrides shuffling,
+        until it's over.
+
+        Triggers the
+        [tracklist_changed][mopidy.core.CoreListener.tracklist_changed] event.
+
+        Args:
+            tracks: Tracks to request.
+            uris: List of URIs for tracks to request.
+        """
+        index = self.index()
+        next_index = index + 1 if index is not None else 0
+
+        if self._requested:
+            last_index = self.index(self._requested[-1])
+            if last_index is not None:
+                next_index = last_index + 1
+
+        tracklist = self.add(tracks, uris=uris, at_position=next_index)
+
+        self._requested.extend(tracklist)
+
+        return tracklist
 
     def add(  # noqa: C901
         self,
@@ -372,6 +409,7 @@ class TracklistController:
         [tracklist_changed][mopidy.core.CoreListener.tracklist_changed] event.
         """
         self._tl_tracks = []
+        self._requested = []
         self._increase_version()
 
     def filter(self, criteria: Query[TracklistField]) -> list[TlTrack]:
@@ -480,6 +518,7 @@ class TracklistController:
             if tl_track.tlid not in removed_tlids
         ]
         self._remove_from_shuffled(tl_tracks=tl_tracks)
+        self._remove_from_requested(tl_tracks=tl_tracks)
         # If the tracklist is empty, _increase_version() stops playback.
         if current_removed and self._tl_tracks:
             self.core.playback._on_current_track_removed(next_tl_track=next_tl_track)
@@ -504,6 +543,7 @@ class TracklistController:
             candidate = self._get_next_tl_track(reference=candidate)
             if candidate is None or candidate.tlid not in removed_tlids:
                 return candidate
+            self._remove_from_requested(tl_tracks=[candidate])
             self._remove_from_shuffled(tl_tracks=[candidate])
         return None
 
@@ -511,6 +551,12 @@ class TracklistController:
         tlids = {tl_track.tlid for tl_track in tl_tracks}
         self._shuffled = [
             tl_track for tl_track in self._shuffled if tl_track.tlid not in tlids
+        ]
+
+    def _remove_from_requested(self, *, tl_tracks: Iterable[TlTrack]) -> None:
+        tlids = {tl_track.tlid for tl_track in tl_tracks}
+        self._requested = [
+            tl_track for tl_track in self._requested if tl_track.tlid not in tlids
         ]
 
     def shuffle(self, start: int | None = None, end: int | None = None) -> None:
@@ -561,6 +607,8 @@ class TracklistController:
 
     def _mark_playing(self, *, tl_track: TlTrack) -> None:
         """Internal method for [PlaybackController][mopidy.core.PlaybackController]."""
+        self._remove_from_requested(tl_tracks=[tl_track])
+
         if self.get_random():
             self._remove_from_shuffled(tl_tracks=[tl_track])
 

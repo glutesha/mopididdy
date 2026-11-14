@@ -86,6 +86,40 @@ def test_add_by_uris_looks_up_uris_in_library(core, library, tracks, tl_tracks):
     assert tl_tracks == core.tracklist.get_tl_tracks()[(-len(tl_tracks)) :]
 
 
+def test_request_by_uri_follow_sequence(core, library, tracks, tl_tracks):
+    library.lookup_many.reset_mock()
+    core.tracklist.clear()
+
+    added_tracks = tracks[:2]
+
+    core.tracklist.add(uris=[t.uri for t in added_tracks])
+    core.tracklist.request(uris=[tracks[2].uri])
+
+    tl_tracks = core.tracklist.get_tl_tracks()
+
+    assert len(tl_tracks) == 3
+    assert tracks[2] == tl_tracks[0].track
+    assert added_tracks[0] == tl_tracks[1].track
+    assert added_tracks[1] == tl_tracks[2].track
+
+
+def test_request_by_uris_follow_sequence(core, library, tracks, tl_tracks):
+    library.lookup_many.reset_mock()
+    core.tracklist.clear()
+
+    requested_tracks = tracks[:2]
+
+    core.tracklist.add(uris=[tracks[0].uri])
+    core.tracklist.request(uris=[t.uri for t in requested_tracks])
+
+    tl_tracks = core.tracklist.get_tl_tracks()
+
+    assert len(tl_tracks) == 3
+    assert requested_tracks[0] == tl_tracks[0].track
+    assert requested_tracks[1] == tl_tracks[1].track
+    assert tracks[0] == tl_tracks[2].track
+
+
 def test_remove_removes_tl_tracks_matching_query(core, tl_tracks):
     result = core.tracklist.remove({"name": ["foo"]})
 
