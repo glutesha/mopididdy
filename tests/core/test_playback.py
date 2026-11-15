@@ -242,6 +242,40 @@ class TestNextHandling(BaseTest):
         else:
             assert self.core.playback.get_current_tl_track() == tl_tracks[result]
 
+    @pytest.mark.parametrize(
+        ("repeat", "random", "single", "consume", "index", "result"),
+        [
+            (False, False, False, False, 0, 1),
+            (False, False, False, False, 2, None),
+            (True, False, False, False, 0, 1),
+            (True, False, False, False, 2, 0),
+        ],
+    )
+    def test_next_all_modes_requested_does_not_alter_queue_in_each_mode(
+        self, *, repeat, random, single, consume, index, result
+    ):
+        tl_tracks = self.core.tracklist.get_tl_tracks()
+
+        self.core.playback.play(tl_tracks[index].tlid)
+        self.replay_events()
+        self.core.tracklist.set_repeat(repeat)
+        self.core.tracklist.set_random(random)
+        self.core.tracklist.set_single(single)
+        self.core.tracklist.set_consume(consume)
+
+        track = Track(uri="dummy:a", length=1234)
+        self.core.tracklist.request([track])
+        self.core.playback.next()
+        self.replay_events()
+
+        self.core.playback.next()
+        self.replay_events()
+
+        if result is None:
+            assert self.core.playback.get_current_tl_track() is None
+        else:
+            assert self.core.playback.get_current_tl_track() == tl_tracks[result]
+
     def test_next_keeps_finished_track_in_tracklist(self):
         tl_track = self.core.tracklist.get_tl_tracks()[0]
 

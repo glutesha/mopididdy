@@ -125,6 +125,7 @@ class TracklistControllerState(BaseModel):
     # The list of requested tracks. Read-only.
     tl_requested_tracks: tuple[TlTrack, ...] = ()
 
+
 class CoreControllersState(BaseModel):
     """State of all Core controllers.
 
