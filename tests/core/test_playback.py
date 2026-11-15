@@ -372,6 +372,41 @@ class TestNextHandling(BaseTest):
         current_tl_track = self.core.playback.get_current_tl_track()
         assert current_tl_track == tl_tracks[1]
 
+    def test_requests_position_while_playing(self):
+        tl_tracks = self.core.tracklist.get_tl_tracks()
+
+        tracks = [
+            Track(uri="dummy:a", length=1234),
+            Track(uri="dummy:b", length=1234),
+            Track(uri="dummy:c", length=1234),
+            Track(uri="dummy:d", length=1234),
+        ]
+
+        self.core.playback.play()
+        self.replay_events()
+
+        tracks1 = self.core.tracklist.request(tracks[0:2])
+        tracks2 = self.core.tracklist.request(tracks[1:3], at_position=1)
+        tl = self.core.tracklist.get_tl_tracks()
+
+        assert tl == [
+            tl_tracks[0],
+            tracks1[0],
+            tracks2[0],
+            tracks2[1],
+            tracks1[1],
+            *tl_tracks[1:],
+        ]
+
+        played = []
+
+        for _ in range(5):
+            self.core.playback.next()
+            self.replay_events()
+            played.append(self.core.playback.get_current_tl_track())
+
+        assert played == [tracks1[0], tracks2[0], tracks2[1], tracks1[1], tl_tracks[1]]
+
     def test_next_requested_gets_played_even_random(self):
         tracks = [
             Track(uri="dummy:b", length=1234),

@@ -302,6 +302,7 @@ class TracklistController:
         self,
         tracks: Iterable[Track] | None = None,
         *,
+        at_position: int | None = None,
         uris: Iterable[Uri] | None = None,
     ) -> list[TlTrack]:
         """Requests tracks to the tracklist.
@@ -310,24 +311,36 @@ class TracklistController:
         state, where tracks are playing from a special queue that overrides shuffling,
         until it's over.
 
+        If `at_position` is given, the tracks are inserted at the given
+        position in the requested list. If `at_position` is not given, the tracks
+        are appended to the end of the requested list.
+
         Triggers the
         [tracklist_changed][mopidy.core.CoreListener.tracklist_changed] event.
 
         Args:
             tracks: Tracks to request.
+            at_position: Position in requested list to add tracks.
             uris: List of URIs for tracks to request.
         """
-        index = self.index()
-        next_index = index + 1 if index is not None else 0
+        validation.check_integer(at_position or 0)
 
-        if self._requested:
+        index = self.index()
+
+        if at_position is None:
+            at_position = len(self._requested)
+
+        if at_position < len(self._requested):
+            index = self.index(self._requested[at_position])
+        elif self._requested:
             last_index = self.index(self._requested[-1])
             if last_index is not None:
-                next_index = last_index + 1
+                index = last_index + 1
+        else:
+            index = index + 1 if index is not None else 0
 
-        tracklist = self.add(tracks, uris=uris, at_position=next_index)
-
-        self._requested.extend(tracklist)
+        tracklist = self.add(tracks, uris=uris, at_position=index)
+        self._requested[at_position:at_position] = tracklist
 
         return tracklist
 

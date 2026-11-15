@@ -120,6 +120,37 @@ def test_request_by_uris_follow_sequence(core, library, tracks, tl_tracks):
     assert tracks[0] == tl_tracks[2].track
 
 
+def test_request_by_uri_at_position_follow_sequence(core, library, tracks, tl_tracks):
+    library.lookup_many.reset_mock()
+    core.tracklist.clear()
+
+    core.tracklist.request(uris=[tracks[0].uri])
+    core.tracklist.request(uris=[tracks[1].uri])
+    core.tracklist.request(uris=[tracks[2].uri], at_position=1)
+
+    tl_tracks = core.tracklist.get_tl_tracks()
+
+    assert len(tl_tracks) == 3
+    assert tracks[0] == tl_tracks[0].track
+    assert tracks[2] == tl_tracks[1].track
+    assert tracks[1] == tl_tracks[2].track
+
+
+def test_request_by_uris_at_position_follow_sequence(core, library, tracks, tl_tracks):
+    library.lookup_many.reset_mock()
+    core.tracklist.clear()
+
+    core.tracklist.request(uris=[tracks[0].uri])
+    core.tracklist.request(uris=[t.uri for t in tracks[1:3]], at_position=0)
+
+    tl_tracks = core.tracklist.get_tl_tracks()
+
+    assert len(tl_tracks) == 3
+    assert tracks[1] == tl_tracks[0].track
+    assert tracks[2] == tl_tracks[1].track
+    assert tracks[0] == tl_tracks[2].track
+
+
 def test_remove_removes_tl_tracks_matching_query(core, tl_tracks):
     result = core.tracklist.remove({"name": ["foo"]})
 
