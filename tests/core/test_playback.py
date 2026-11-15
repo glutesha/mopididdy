@@ -276,6 +276,36 @@ class TestNextHandling(BaseTest):
         else:
             assert self.core.playback.get_current_tl_track() == tl_tracks[result]
 
+        assert track not in self.core.tracklist.get_tracks()
+
+    def test_next_tild_while_requested_plays(self):
+        self.core.playback.play()
+        self.replay_events()
+
+        track1, track2 = self.core.tracklist.request(
+            [Track(uri="dummy:a", length=1234), Track(uri="dummy:b", length=1234)]
+        )
+
+        self.core.playback.next()
+        self.replay_events()
+
+        assert self.core.playback.get_current_tl_track() == track1
+        assert self.core.tracklist.get_next_tlid() == track2.tlid
+
+    def test_manual_stop_removes_requested(self):
+        self.core.playback.play()
+        self.replay_events()
+
+        track1 = self.core.tracklist.request([Track(uri="dummy:a", length=1234)])
+
+        self.core.playback.next()
+        self.replay_events()
+
+        self.core.playback.stop()
+        self.replay_events()
+
+        assert track1 not in self.core.tracklist.get_tl_tracks()
+
     def test_next_keeps_finished_track_in_tracklist(self):
         tl_track = self.core.tracklist.get_tl_tracks()[0]
 

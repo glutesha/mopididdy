@@ -238,8 +238,14 @@ class TracklistController:
         if not self._tl_tracks:
             return None
 
-        if self._requested:
-            return self._requested[0]
+        requested = (
+            [track for track in self._requested if track.tlid != reference.tlid]
+            if reference
+            else self._requested
+        )
+
+        if requested:
+            return requested[0]
 
         if (
             self.get_random()
@@ -307,9 +313,10 @@ class TracklistController:
     ) -> list[TlTrack]:
         """Requests tracks to the tracklist.
 
-        Invokes add method, except it makes the tracklist enter the `requested`
-        state, where tracks are playing from a special queue that overrides shuffling,
-        until it's over.
+        Adds the tracks using add, but plays them next,
+        before the rest of the tracklist, even when random is enabled.
+        The requested track then gets removed when it stops playing, and the
+        playback continues from where it left off.
 
         If `at_position` is given, the tracks are inserted at the given
         position in the requested list. If `at_position` is not given, the tracks
@@ -620,8 +627,6 @@ class TracklistController:
 
     def _mark_playing(self, *, tl_track: TlTrack) -> None:
         """Internal method for [PlaybackController][mopidy.core.PlaybackController]."""
-        self._remove_from_requested(tl_tracks=[tl_track])
-
         if self.get_random():
             self._remove_from_shuffled(tl_tracks=[tl_track])
 
@@ -650,7 +655,7 @@ class TracklistController:
             self.get_consume()
             and tl_track is not None
             and self.index(tlid=tl_track.tlid) is not None
-        ):
+        ) or tl_track in self._requested:
             self.remove({"tlid": [tl_track.tlid]})
             return True
         return False
