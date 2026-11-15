@@ -645,6 +645,7 @@ class TracklistController:
     def _save_state(self) -> TracklistControllerState:
         return TracklistControllerState(
             tl_tracks=tuple(self._tl_tracks),
+            tl_requested_tracks=tuple(self._requested),
             next_tlid=self._next_tlid,
             consume=self.get_consume(),
             random=self.get_random(),
@@ -668,6 +669,7 @@ class TracklistController:
                 self._next_tlid = max(TracklistId(state.next_tlid), self._next_tlid)
                 self._tl_tracks = list(state.tl_tracks)
                 self._increase_version()
+                self._requested = list(state.tl_requested_tracks)
 
     def _increase_version(self) -> None:
         self._version += 1
