@@ -288,7 +288,7 @@ def state_tl_tracks():
 
 
 def test_save_load_state_save(mocked_core, tracks):
-    tl_tracks = mocked_core.tracklist.add(uris=[t.uri for t in tracks])
+    tl_tracks = mocked_core.tracklist.request(uris=[t.uri for t in tracks])
     consume = True
     next_tlid = len(tl_tracks) + 1
     mocked_core.tracklist.set_consume(consume)
@@ -299,6 +299,7 @@ def test_save_load_state_save(mocked_core, tracks):
         random=False,
         next_tlid=next_tlid,
         tl_tracks=tuple(tl_tracks),
+        tl_requested_tracks=tuple(tl_tracks),
     )
 
 
@@ -311,6 +312,7 @@ def test_save_load_state_load(mocked_core, tracks, state_tl_tracks):
         random=False,
         next_tlid=12,
         tl_tracks=state_tl_tracks,
+        tl_requested_tracks=state_tl_tracks,
     )
     coverage = ["mode", "tracklist"]
     mocked_core.tracklist._load_state(state=target, coverage=coverage)
@@ -321,6 +323,7 @@ def test_save_load_state_load(mocked_core, tracks, state_tl_tracks):
     assert mocked_core.tracklist._next_tlid == 12
     assert mocked_core.tracklist.get_length() == 4
     assert state_tl_tracks == mocked_core.tracklist.get_tl_tracks()
+    assert state_tl_tracks == mocked_core.tracklist._requested
     assert mocked_core.tracklist.get_version() > old_version
 
     # after load, adding more tracks must be possible
