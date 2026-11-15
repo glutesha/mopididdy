@@ -761,6 +761,7 @@ class TracklistControllerProxy:
     get_next_tlid = proxy_method(TracklistController.get_next_tlid)
     get_previous_tlid = proxy_method(TracklistController.get_previous_tlid)
     add = proxy_method(TracklistController.add)
+    request = proxy_method(TracklistController.request)
     clear = proxy_method(TracklistController.clear)
     filter = proxy_method(TracklistController.filter)
     move = proxy_method(TracklistController.move)
