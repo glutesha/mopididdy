@@ -31,6 +31,7 @@ class TracklistController:
     def __init__(self, core: Core) -> None:
         self.core = core
         self._next_tlid: TracklistId = TracklistId(1)
+        self._resume_tl_track: TracklistId | None = TracklistId(1)
         self._tl_tracks: list[TlTrack] = []
         self._version: int = 0
 
@@ -207,9 +208,19 @@ class TracklistController:
         return tl_track.tlid if tl_track else None
 
     def _get_eot_tl_track(self, reference: TlTrack | None) -> TlTrack | None:
+        if reference in self._requested:
+            requested = [request for request in self._requested if request != reference]
+            if requested:
+                return requested[0]
+
         # Consume mode removes the track, so do not repeat it.
         if self.get_single() and self.get_repeat() and not self.get_consume():
+            if self._resume_tlid is not None:
+                resumed = self.index(tlid=self._resume_tlid)
+                if resumed is not None:
+                    return self._tl_tracks[resumed]
             return reference
+
         if self.get_single() and not self.get_repeat():
             return None
 
@@ -635,6 +646,9 @@ class TracklistController:
 
     def _mark_playing(self, *, tl_track: TlTrack) -> None:
         """Internal method for [PlaybackController][mopidy.core.PlaybackController]."""
+        if tl_track not in self._requested:
+            self._resume_tlid = tl_track.tlid
+
         if self.get_random():
             self._remove_from_shuffled(tl_tracks=[tl_track])
 

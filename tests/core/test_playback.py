@@ -278,6 +278,37 @@ class TestNextHandling(BaseTest):
 
         assert track not in self.core.tracklist.get_tracks()
 
+    @pytest.mark.parametrize(
+        ("repeat", "random", "single", "consume", "index", "result"),
+        [
+            (False, False, False, False, 1, 2),
+            (False, False, True, False, 0, None),
+            (False, False, False, True, 0, 1),
+            (True, False, True, False, 0, 0),
+        ],
+    )
+    def test_request_about_to_finish(
+        self, *, repeat, random, single, consume, index, result
+    ):
+        tl_tracks = self.core.tracklist.get_tl_tracks()
+
+        self.core.playback.play(tl_tracks[index].tlid)
+        self.replay_events()
+        self.core.tracklist.set_repeat(repeat)
+        self.core.tracklist.set_random(random)
+        self.core.tracklist.set_single(single)
+        self.core.tracklist.set_consume(consume)
+
+        track = Track(uri="dummy:a", length=1234)
+        self.core.tracklist.request([track])
+        self.core.playback.next()
+        self.replay_events()
+
+        if result is None:
+            assert self.core.tracklist.get_eot_tlid() is None
+        else:
+            assert self.core.tracklist.get_eot_tlid() == tl_tracks[result].tlid
+
     def test_next_tild_while_requested_plays(self):
         self.core.playback.play()
         self.replay_events()
