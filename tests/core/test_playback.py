@@ -292,6 +292,33 @@ class TestNextHandling(BaseTest):
         assert self.core.playback.get_current_tl_track() == track1
         assert self.core.tracklist.get_next_tlid() == track2.tlid
 
+    def test_request_next_shuffled_tlid_plays_unaltered(self):
+        self.core.playback.play()
+        self.replay_events()
+
+        self.core.tracklist.set_random(True)
+        self.core.tracklist.add(
+            [
+                Track(uri="dummy:a", length=1234),
+                Track(uri="dummy:b", length=1234),
+                Track(uri="dummy:c", length=1234),
+            ]
+        )
+
+        next_tlid = self.core.tracklist.get_next_tlid()
+
+        track = self.core.tracklist.request([Track(uri="dummy:d", length=1234)])
+
+        self.core.playback.next()
+        self.replay_events()
+
+        assert self.core.playback.get_current_tl_track() == track[0]
+
+        self.core.playback.next()
+        self.replay_events()
+
+        assert self.core.playback.get_current_tlid() == next_tlid
+
     def test_manual_stop_removes_requested(self):
         self.core.playback.play()
         self.replay_events()

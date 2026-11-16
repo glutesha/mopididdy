@@ -335,6 +335,7 @@ class TracklistController:
             at_position: Position in requested list to add tracks.
             uris: List of URIs for tracks to request.
         """
+        shuffled = self._shuffled
         validation.check_integer(at_position or 0)
 
         index = self.index()
@@ -353,6 +354,8 @@ class TracklistController:
 
         tracklist = self.add(tracks, uris=uris, at_position=index)
         self._requested[at_position:at_position] = tracklist
+
+        self._shuffled = shuffled
 
         return tracklist
 
@@ -656,12 +659,16 @@ class TracklistController:
 
     def _mark_played(self, *, tl_track: TlTrack | None) -> bool:
         """Internal method for [PlaybackController][mopidy.core.PlaybackController]."""
+        requested = tl_track in self._requested
         if (
             self.get_consume()
             and tl_track is not None
             and self.index(tlid=tl_track.tlid) is not None
-        ) or tl_track in self._requested:
+        ) or requested:
+            shuffled = self._shuffled
             self.remove({"tlid": [tl_track.tlid]})
+            if requested:
+                self._shuffled = shuffled
             return True
         return False
 
