@@ -311,16 +311,21 @@ class TracklistController:
         at_position: int | None = None,
         uris: Iterable[Uri] | None = None,
     ) -> list[TlTrack]:
-        """Requests tracks to the tracklist.
+        """Request tracks to play next.
 
-        Adds the tracks using add, but plays them next,
-        before the rest of the tracklist, even when random is enabled.
-        The requested track then gets removed when it stops playing, and the
-        playback continues from where it left off.
+        Adds the tracks using [add()][mopidy.core.TracklistController.add], but plays
+        them next, before the rest of the tracklist, even when random is enabled.
+        Each requested track is removed when it stops playing, even without
+        consume, and the playback continues from where it left off.
 
         If `at_position` is given, the tracks are inserted at the given
         position in the requested list. If `at_position` is not given, the tracks
-        are appended to the end of the requested list.
+        are appended to the end of the requested list. The requested list is separate
+        from the tracklist.
+
+        [remove()][mopidy.core.TracklistController.remove] and
+        [clear()][mopidy.core.TracklistController.clear] removes
+        these tracks from both the request list and the tracklist.
 
         Triggers the
         [tracklist_changed][mopidy.core.CoreListener.tracklist_changed] event.
