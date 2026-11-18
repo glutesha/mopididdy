@@ -1,5 +1,6 @@
 *.egg-info/
 /*.lock
+!flake.lock
 /.*_cache/
 /.coverage
 /.tox/
@@ -9,3 +10,5 @@
 /site/
 __pycache__/
 mopidy.log*
+.envrc
+.direnv
