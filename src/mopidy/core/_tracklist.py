@@ -692,6 +692,7 @@ class TracklistController:
             tl_tracks=tuple(self._tl_tracks),
             tl_requested_tracks=tuple(self._requested),
             next_tlid=self._next_tlid,
+            resume_tlid=self._resume_tlid,
             consume=self.get_consume(),
             random=self.get_random(),
             repeat=self.get_repeat(),
@@ -712,6 +713,8 @@ class TracklistController:
                 self.set_single(state.single)
             if "tracklist" in coverage:
                 self._next_tlid = max(TracklistId(state.next_tlid), self._next_tlid)
+                if state.resume_tlid is not None:
+                    self._resume_tlid = state.resume_tlid
                 self._tl_tracks = list(state.tl_tracks)
                 self._increase_version()
                 self._requested = list(state.tl_requested_tracks)
