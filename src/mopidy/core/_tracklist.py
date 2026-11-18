@@ -31,7 +31,7 @@ class TracklistController:
     def __init__(self, core: Core) -> None:
         self.core = core
         self._next_tlid: TracklistId = TracklistId(1)
-        self._resume_tl_track: TracklistId | None = TracklistId(1)
+        self._resume_tlid: TracklistId | None = None
         self._tl_tracks: list[TlTrack] = []
         self._version: int = 0
 
@@ -208,10 +208,12 @@ class TracklistController:
         return tl_track.tlid if tl_track else None
 
     def _get_eot_tl_track(self, reference: TlTrack | None) -> TlTrack | None:
-        if reference in self._requested:
-            requested = [request for request in self._requested if request != reference]
-            if requested:
-                return requested[0]
+        requested = (
+            next((request for request in self._requested if request != reference), None)
+        )
+
+        if requested:
+            return requested
 
         # Consume mode removes the track, so do not repeat it.
         if self.get_single() and self.get_repeat() and not self.get_consume():
@@ -250,13 +252,11 @@ class TracklistController:
             return None
 
         requested = (
-            [track for track in self._requested if track.tlid != reference.tlid]
-            if reference
-            else self._requested
+            next((request for request in self._requested if request != reference), None)
         )
 
         if requested:
-            return requested[0]
+            return requested
 
         if (
             self.get_random()
@@ -449,6 +449,7 @@ class TracklistController:
         """
         self._tl_tracks = []
         self._requested = []
+        self._resume_tlid = None
         self._increase_version()
 
     def filter(self, criteria: Query[TracklistField]) -> list[TlTrack]:

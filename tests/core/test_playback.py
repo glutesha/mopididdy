@@ -309,6 +309,21 @@ class TestNextHandling(BaseTest):
         else:
             assert self.core.tracklist.get_eot_tlid() == tl_tracks[result].tlid
 
+    def test_requests_play_in_single(self):
+        tl_tracks = self.core.tracklist.get_tl_tracks()
+        self.core.tracklist.set_single(True)
+        self.core.playback.play(tl_tracks[0].tlid)
+        self.replay_events()
+
+        track = Track(uri="dummy:a", length=1234)
+        self.core.tracklist.request([track])
+
+        self.core.playback.next()
+        self.replay_events()
+
+        assert self.core.playback.get_current_track() == track
+
+
     def test_next_tild_while_requested_plays(self):
         self.core.playback.play()
         self.replay_events()
