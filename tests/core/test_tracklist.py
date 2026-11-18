@@ -86,6 +86,71 @@ def test_add_by_uris_looks_up_uris_in_library(core, library, tracks, tl_tracks):
     assert tl_tracks == core.tracklist.get_tl_tracks()[(-len(tl_tracks)) :]
 
 
+def test_request_by_uri_follow_sequence(core, library, tracks, tl_tracks):
+    library.lookup_many.reset_mock()
+    core.tracklist.clear()
+
+    added_tracks = tracks[:2]
+
+    core.tracklist.add(uris=[t.uri for t in added_tracks])
+    core.tracklist.request(uris=[tracks[2].uri])
+
+    tl_tracks = core.tracklist.get_tl_tracks()
+
+    assert len(tl_tracks) == 3
+    assert tracks[2] == tl_tracks[0].track
+    assert added_tracks[0] == tl_tracks[1].track
+    assert added_tracks[1] == tl_tracks[2].track
+
+
+def test_request_by_uris_follow_sequence(core, library, tracks, tl_tracks):
+    library.lookup_many.reset_mock()
+    core.tracklist.clear()
+
+    requested_tracks = tracks[:2]
+
+    core.tracklist.add(uris=[tracks[0].uri])
+    core.tracklist.request(uris=[t.uri for t in requested_tracks])
+
+    tl_tracks = core.tracklist.get_tl_tracks()
+
+    assert len(tl_tracks) == 3
+    assert requested_tracks[0] == tl_tracks[0].track
+    assert requested_tracks[1] == tl_tracks[1].track
+    assert tracks[0] == tl_tracks[2].track
+
+
+def test_request_by_uri_at_position_follow_sequence(core, library, tracks, tl_tracks):
+    library.lookup_many.reset_mock()
+    core.tracklist.clear()
+
+    core.tracklist.request(uris=[tracks[0].uri])
+    core.tracklist.request(uris=[tracks[1].uri])
+    core.tracklist.request(uris=[tracks[2].uri], at_position=1)
+
+    tl_tracks = core.tracklist.get_tl_tracks()
+
+    assert len(tl_tracks) == 3
+    assert tracks[0] == tl_tracks[0].track
+    assert tracks[2] == tl_tracks[1].track
+    assert tracks[1] == tl_tracks[2].track
+
+
+def test_request_by_uris_at_position_follow_sequence(core, library, tracks, tl_tracks):
+    library.lookup_many.reset_mock()
+    core.tracklist.clear()
+
+    core.tracklist.request(uris=[tracks[0].uri])
+    core.tracklist.request(uris=[t.uri for t in tracks[1:3]], at_position=0)
+
+    tl_tracks = core.tracklist.get_tl_tracks()
+
+    assert len(tl_tracks) == 3
+    assert tracks[1] == tl_tracks[0].track
+    assert tracks[2] == tl_tracks[1].track
+    assert tracks[0] == tl_tracks[2].track
+
+
 def test_remove_removes_tl_tracks_matching_query(core, tl_tracks):
     result = core.tracklist.remove({"name": ["foo"]})
 
@@ -223,7 +288,7 @@ def state_tl_tracks():
 
 
 def test_save_load_state_save(mocked_core, tracks):
-    tl_tracks = mocked_core.tracklist.add(uris=[t.uri for t in tracks])
+    tl_tracks = mocked_core.tracklist.request(uris=[t.uri for t in tracks])
     consume = True
     next_tlid = len(tl_tracks) + 1
     mocked_core.tracklist.set_consume(consume)
@@ -234,6 +299,7 @@ def test_save_load_state_save(mocked_core, tracks):
         random=False,
         next_tlid=next_tlid,
         tl_tracks=tuple(tl_tracks),
+        tl_requested_tracks=tuple(tl_tracks),
     )
 
 
@@ -246,6 +312,7 @@ def test_save_load_state_load(mocked_core, tracks, state_tl_tracks):
         random=False,
         next_tlid=12,
         tl_tracks=state_tl_tracks,
+        tl_requested_tracks=state_tl_tracks,
     )
     coverage = ["mode", "tracklist"]
     mocked_core.tracklist._load_state(state=target, coverage=coverage)
@@ -256,6 +323,7 @@ def test_save_load_state_load(mocked_core, tracks, state_tl_tracks):
     assert mocked_core.tracklist._next_tlid == 12
     assert mocked_core.tracklist.get_length() == 4
     assert state_tl_tracks == mocked_core.tracklist.get_tl_tracks()
+    assert state_tl_tracks == mocked_core.tracklist._requested
     assert mocked_core.tracklist.get_version() > old_version
 
     # after load, adding more tracks must be possible

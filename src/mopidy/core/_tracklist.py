@@ -31,12 +31,14 @@ class TracklistController:
     def __init__(self, core: Core) -> None:
         self.core = core
         self._next_tlid: TracklistId = TracklistId(1)
+        self._resume_tlid: TracklistId | None = None
         self._tl_tracks: list[TlTrack] = []
         self._version: int = 0
 
         self._consume: bool = False
         self._random: bool = False
         self._shuffled: list[TlTrack] = []
+        self._requested: list[TlTrack] = []
         self._unplayable: list[TlTrack] = []
         self._repeat: bool = False
         self._single: bool = False
@@ -206,9 +208,21 @@ class TracklistController:
         return tl_track.tlid if tl_track else None
 
     def _get_eot_tl_track(self, reference: TlTrack | None) -> TlTrack | None:
+        requested = (
+            next((request for request in self._requested if request != reference), None)
+        )
+
+        if requested:
+            return requested
+
         # Consume mode removes the track, so do not repeat it.
         if self.get_single() and self.get_repeat() and not self.get_consume():
+            if self._resume_tlid is not None:
+                resumed = self.index(tlid=self._resume_tlid)
+                if resumed is not None:
+                    return self._tl_tracks[resumed]
             return reference
+
         if self.get_single() and not self.get_repeat():
             return None
 
@@ -233,9 +247,16 @@ class TracklistController:
         )
         return tl_track.tlid if tl_track else None
 
-    def _get_next_tl_track(self, reference: TlTrack | None) -> TlTrack | None:
+    def _get_next_tl_track(self, reference: TlTrack | None) -> TlTrack | None:  # noqa: PLR0911
         if not self._tl_tracks:
             return None
+
+        requested = (
+            next((request for request in self._requested if request != reference), None)
+        )
+
+        if requested:
+            return requested
 
         if (
             self.get_random()
@@ -293,6 +314,61 @@ class TracklistController:
         # Since we know we are not at zero we have to be somewhere in the range
         # 1 - len(tracks) Thus 'position - 1' will always be within the list.
         return self._tl_tracks[position - 1]
+
+    def request(
+        self,
+        tracks: Iterable[Track] | None = None,
+        *,
+        at_position: int | None = None,
+        uris: Iterable[Uri] | None = None,
+    ) -> list[TlTrack]:
+        """Request tracks to play next.
+
+        Adds the tracks using [add()][mopidy.core.TracklistController.add], but plays
+        them next, before the rest of the tracklist, even when random is enabled.
+        Each requested track is removed when it stops playing, even without
+        consume, and the playback continues from where it left off.
+
+        If `at_position` is given, the tracks are inserted at the given
+        position in the requested list. If `at_position` is not given, the tracks
+        are appended to the end of the requested list. The requested list is separate
+        from the tracklist.
+
+        [remove()][mopidy.core.TracklistController.remove] and
+        [clear()][mopidy.core.TracklistController.clear] removes
+        these tracks from both the request list and the tracklist.
+
+        Triggers the
+        [tracklist_changed][mopidy.core.CoreListener.tracklist_changed] event.
+
+        Args:
+            tracks: Tracks to request.
+            at_position: Position in requested list to add tracks.
+            uris: List of URIs for tracks to request.
+        """
+        shuffled = self._shuffled
+        validation.check_integer(at_position or 0)
+
+        index = self.index()
+
+        if at_position is None:
+            at_position = len(self._requested)
+
+        if at_position < len(self._requested):
+            index = self.index(self._requested[at_position])
+        elif self._requested:
+            last_index = self.index(self._requested[-1])
+            if last_index is not None:
+                index = last_index + 1
+        else:
+            index = index + 1 if index is not None else 0
+
+        tracklist = self.add(tracks, uris=uris, at_position=index)
+        self._requested[at_position:at_position] = tracklist
+
+        self._shuffled = shuffled
+
+        return tracklist
 
     def add(  # noqa: C901
         self,
@@ -372,6 +448,8 @@ class TracklistController:
         [tracklist_changed][mopidy.core.CoreListener.tracklist_changed] event.
         """
         self._tl_tracks = []
+        self._requested = []
+        self._resume_tlid = None
         self._increase_version()
 
     def filter(self, criteria: Query[TracklistField]) -> list[TlTrack]:
@@ -480,6 +558,7 @@ class TracklistController:
             if tl_track.tlid not in removed_tlids
         ]
         self._remove_from_shuffled(tl_tracks=tl_tracks)
+        self._remove_from_requested(tl_tracks=tl_tracks)
         # If the tracklist is empty, _increase_version() stops playback.
         if current_removed and self._tl_tracks:
             self.core.playback._on_current_track_removed(next_tl_track=next_tl_track)
@@ -504,6 +583,7 @@ class TracklistController:
             candidate = self._get_next_tl_track(reference=candidate)
             if candidate is None or candidate.tlid not in removed_tlids:
                 return candidate
+            self._remove_from_requested(tl_tracks=[candidate])
             self._remove_from_shuffled(tl_tracks=[candidate])
         return None
 
@@ -511,6 +591,12 @@ class TracklistController:
         tlids = {tl_track.tlid for tl_track in tl_tracks}
         self._shuffled = [
             tl_track for tl_track in self._shuffled if tl_track.tlid not in tlids
+        ]
+
+    def _remove_from_requested(self, *, tl_tracks: Iterable[TlTrack]) -> None:
+        tlids = {tl_track.tlid for tl_track in tl_tracks}
+        self._requested = [
+            tl_track for tl_track in self._requested if tl_track.tlid not in tlids
         ]
 
     def shuffle(self, start: int | None = None, end: int | None = None) -> None:
@@ -561,6 +647,9 @@ class TracklistController:
 
     def _mark_playing(self, *, tl_track: TlTrack) -> None:
         """Internal method for [PlaybackController][mopidy.core.PlaybackController]."""
+        if tl_track not in self._requested:
+            self._resume_tlid = tl_track.tlid
+
         if self.get_random():
             self._remove_from_shuffled(tl_tracks=[tl_track])
 
@@ -585,19 +674,25 @@ class TracklistController:
 
     def _mark_played(self, *, tl_track: TlTrack | None) -> bool:
         """Internal method for [PlaybackController][mopidy.core.PlaybackController]."""
+        requested = tl_track in self._requested
         if (
             self.get_consume()
             and tl_track is not None
             and self.index(tlid=tl_track.tlid) is not None
-        ):
+        ) or requested:
+            shuffled = self._shuffled
             self.remove({"tlid": [tl_track.tlid]})
+            if requested:
+                self._shuffled = shuffled
             return True
         return False
 
     def _save_state(self) -> TracklistControllerState:
         return TracklistControllerState(
             tl_tracks=tuple(self._tl_tracks),
+            tl_requested_tracks=tuple(self._requested),
             next_tlid=self._next_tlid,
+            resume_tlid=self._resume_tlid,
             consume=self.get_consume(),
             random=self.get_random(),
             repeat=self.get_repeat(),
@@ -618,8 +713,11 @@ class TracklistController:
                 self.set_single(state.single)
             if "tracklist" in coverage:
                 self._next_tlid = max(TracklistId(state.next_tlid), self._next_tlid)
+                if state.resume_tlid is not None:
+                    self._resume_tlid = state.resume_tlid
                 self._tl_tracks = list(state.tl_tracks)
                 self._increase_version()
+                self._requested = list(state.tl_requested_tracks)
 
     def _increase_version(self) -> None:
         self._version += 1
@@ -711,6 +809,7 @@ class TracklistControllerProxy:
     get_next_tlid = proxy_method(TracklistController.get_next_tlid)
     get_previous_tlid = proxy_method(TracklistController.get_previous_tlid)
     add = proxy_method(TracklistController.add)
+    request = proxy_method(TracklistController.request)
     clear = proxy_method(TracklistController.clear)
     filter = proxy_method(TracklistController.filter)
     move = proxy_method(TracklistController.move)

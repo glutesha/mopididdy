@@ -122,6 +122,12 @@ class TracklistControllerState(BaseModel):
     # The list of tracks. Read-only.
     tl_tracks: tuple[TlTrack, ...] = ()
 
+    # The list of requested tracks. Read-only.
+    tl_requested_tracks: tuple[TlTrack, ...] = ()
+
+    # The id of the track to play once the request queue is empty. Read-only.
+    resume_tlid: TracklistId | None = None
+
 
 class CoreControllersState(BaseModel):
     """State of all Core controllers.

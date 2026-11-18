@@ -242,6 +242,143 @@ class TestNextHandling(BaseTest):
         else:
             assert self.core.playback.get_current_tl_track() == tl_tracks[result]
 
+    @pytest.mark.parametrize(
+        ("repeat", "random", "single", "consume", "index", "result"),
+        [
+            (False, False, False, False, 0, 1),
+            (False, False, False, False, 2, None),
+            (True, False, False, False, 0, 1),
+            (True, False, False, False, 2, 0),
+        ],
+    )
+    def test_next_all_modes_requested_does_not_alter_queue_in_each_mode(
+        self, *, repeat, random, single, consume, index, result
+    ):
+        tl_tracks = self.core.tracklist.get_tl_tracks()
+
+        self.core.playback.play(tl_tracks[index].tlid)
+        self.replay_events()
+        self.core.tracklist.set_repeat(repeat)
+        self.core.tracklist.set_random(random)
+        self.core.tracklist.set_single(single)
+        self.core.tracklist.set_consume(consume)
+
+        track = Track(uri="dummy:a", length=1234)
+        self.core.tracklist.request([track])
+        self.core.playback.next()
+        self.replay_events()
+
+        self.core.playback.next()
+        self.replay_events()
+
+        if result is None:
+            assert self.core.playback.get_current_tl_track() is None
+        else:
+            assert self.core.playback.get_current_tl_track() == tl_tracks[result]
+
+        assert track not in self.core.tracklist.get_tracks()
+
+    @pytest.mark.parametrize(
+        ("repeat", "random", "single", "consume", "index", "result"),
+        [
+            (False, False, False, False, 1, 2),
+            (False, False, True, False, 0, None),
+            (False, False, False, True, 0, 1),
+            (True, False, True, False, 0, 0),
+        ],
+    )
+    def test_request_about_to_finish(
+        self, *, repeat, random, single, consume, index, result
+    ):
+        tl_tracks = self.core.tracklist.get_tl_tracks()
+
+        self.core.playback.play(tl_tracks[index].tlid)
+        self.replay_events()
+        self.core.tracklist.set_repeat(repeat)
+        self.core.tracklist.set_random(random)
+        self.core.tracklist.set_single(single)
+        self.core.tracklist.set_consume(consume)
+
+        track = Track(uri="dummy:a", length=1234)
+        self.core.tracklist.request([track])
+        self.core.playback.next()
+        self.replay_events()
+
+        if result is None:
+            assert self.core.tracklist.get_eot_tlid() is None
+        else:
+            assert self.core.tracklist.get_eot_tlid() == tl_tracks[result].tlid
+
+    def test_requests_play_in_single(self):
+        tl_tracks = self.core.tracklist.get_tl_tracks()
+        self.core.tracklist.set_single(True)
+        self.core.playback.play(tl_tracks[0].tlid)
+        self.replay_events()
+
+        track = Track(uri="dummy:a", length=1234)
+        self.core.tracklist.request([track])
+
+        self.core.playback.next()
+        self.replay_events()
+
+        assert self.core.playback.get_current_track() == track
+
+
+    def test_next_tild_while_requested_plays(self):
+        self.core.playback.play()
+        self.replay_events()
+
+        track1, track2 = self.core.tracklist.request(
+            [Track(uri="dummy:a", length=1234), Track(uri="dummy:b", length=1234)]
+        )
+
+        self.core.playback.next()
+        self.replay_events()
+
+        assert self.core.playback.get_current_tl_track() == track1
+        assert self.core.tracklist.get_next_tlid() == track2.tlid
+
+    def test_request_next_shuffled_tlid_plays_unaltered(self):
+        self.core.playback.play()
+        self.replay_events()
+
+        self.core.tracklist.set_random(True)
+        self.core.tracklist.add(
+            [
+                Track(uri="dummy:a", length=1234),
+                Track(uri="dummy:b", length=1234),
+                Track(uri="dummy:c", length=1234),
+            ]
+        )
+
+        next_tlid = self.core.tracklist.get_next_tlid()
+
+        track = self.core.tracklist.request([Track(uri="dummy:d", length=1234)])
+
+        self.core.playback.next()
+        self.replay_events()
+
+        assert self.core.playback.get_current_tl_track() == track[0]
+
+        self.core.playback.next()
+        self.replay_events()
+
+        assert self.core.playback.get_current_tlid() == next_tlid
+
+    def test_manual_stop_removes_requested(self):
+        self.core.playback.play()
+        self.replay_events()
+
+        track1 = self.core.tracklist.request([Track(uri="dummy:a", length=1234)])
+
+        self.core.playback.next()
+        self.replay_events()
+
+        self.core.playback.stop()
+        self.replay_events()
+
+        assert track1 not in self.core.tracklist.get_tl_tracks()
+
     def test_next_keeps_finished_track_in_tracklist(self):
         tl_track = self.core.tracklist.get_tl_tracks()[0]
 
@@ -293,6 +430,140 @@ class TestNextHandling(BaseTest):
         self.replay_events()
 
         assert self.core.playback.get_current_tl_track() == tl_tracks[2]
+
+    def test_next_requested_gets_played(self):
+        tl_tracks = self.core.tracklist.get_tl_tracks()
+
+        track = Track(uri="dummy:a", length=1234)
+
+        self.core.playback.play()
+        self.replay_events()
+
+        requested_track = self.core.tracklist.request([track])
+
+        self.core.playback.next()
+        self.replay_events()
+
+        current_tl_track = self.core.playback.get_current_tl_track()
+        assert current_tl_track == requested_track[0]
+
+        self.core.playback.next()
+        self.replay_events()
+
+        current_tl_track = self.core.playback.get_current_tl_track()
+        assert current_tl_track == tl_tracks[1]
+
+    def test_next_requested_multiple_get_played(self):
+        tl_tracks = self.core.tracklist.get_tl_tracks()
+
+        track1 = Track(uri="dummy:a", length=1234)
+        track2 = Track(uri="dummy:b", length=1234)
+
+        self.core.playback.play()
+        self.replay_events()
+
+        requested_track1 = self.core.tracklist.request([track1])
+        requested_track2 = self.core.tracklist.request([track2])
+
+        self.core.playback.next()
+        self.replay_events()
+
+        current_tl_track = self.core.playback.get_current_tl_track()
+        assert current_tl_track == requested_track1[0]
+
+        self.core.playback.next()
+        self.replay_events()
+
+        current_tl_track = self.core.playback.get_current_tl_track()
+        assert current_tl_track == requested_track2[0]
+
+        self.core.playback.next()
+        self.replay_events()
+
+        current_tl_track = self.core.playback.get_current_tl_track()
+        assert current_tl_track == tl_tracks[1]
+
+    def test_next_requested_gets_played_many(self):
+        tl_tracks = self.core.tracklist.get_tl_tracks()
+
+        tracks = [
+            Track(uri="dummy:b", length=1234),
+            Track(uri="dummy:c", length=1234),
+        ]
+
+        self.core.playback.play()
+        self.replay_events()
+
+        tl_track = self.core.tracklist.request(tracks)
+
+        for i in range(2):
+            self.core.playback.next()
+            self.replay_events()
+
+            current_tl_track = self.core.playback.get_current_tl_track()
+            assert current_tl_track == tl_track[i]
+
+        self.core.playback.next()
+        self.replay_events()
+
+        current_tl_track = self.core.playback.get_current_tl_track()
+        assert current_tl_track == tl_tracks[1]
+
+    def test_requests_position_while_playing(self):
+        tl_tracks = self.core.tracklist.get_tl_tracks()
+
+        tracks = [
+            Track(uri="dummy:a", length=1234),
+            Track(uri="dummy:b", length=1234),
+            Track(uri="dummy:c", length=1234),
+            Track(uri="dummy:d", length=1234),
+        ]
+
+        self.core.playback.play()
+        self.replay_events()
+
+        tracks1 = self.core.tracklist.request(tracks[0:2])
+        tracks2 = self.core.tracklist.request(tracks[1:3], at_position=1)
+        tl = self.core.tracklist.get_tl_tracks()
+
+        assert tl == [
+            tl_tracks[0],
+            tracks1[0],
+            tracks2[0],
+            tracks2[1],
+            tracks1[1],
+            *tl_tracks[1:],
+        ]
+
+        played = []
+
+        for _ in range(5):
+            self.core.playback.next()
+            self.replay_events()
+            played.append(self.core.playback.get_current_tl_track())
+
+        assert played == [tracks1[0], tracks2[0], tracks2[1], tracks1[1], tl_tracks[1]]
+
+    def test_next_requested_gets_played_even_random(self):
+        tracks = [
+            Track(uri="dummy:b", length=1234),
+            Track(uri="dummy:c", length=1234),
+            Track(uri="dummy:a", length=1234),
+        ]
+
+        self.core.tracklist.set_random(True)
+
+        self.core.playback.play()
+        self.replay_events()
+
+        tl_track = self.core.tracklist.request(tracks)
+
+        for i in range(3):
+            self.core.playback.next()
+            self.replay_events()
+
+            current_tl_track = self.core.playback.get_current_tl_track()
+            assert current_tl_track == tl_track[i]
 
 
 class TestPreviousHandling(BaseTest):
